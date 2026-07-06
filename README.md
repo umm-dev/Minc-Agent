@@ -30,6 +30,19 @@ Tool execution stays local and mediated by the app. MincAPI does not get direct 
 
 ## Quickstart
 
+### One Line install
+
+```shell
+git clone https://github.com/umm-dev/Minc-Agent.git
+cd Minc-Agent
+```
+### Come back to it anytime
+
+```shell
+cd ~/Minc-Agent
+pnpm run dev
+```
+
 ### Run From The Repo Root
 
 ```shell
