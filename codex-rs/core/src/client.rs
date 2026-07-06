@@ -111,6 +111,7 @@ use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
 use crate::client_common::ResponseStream;
 use crate::feedback_tags;
+use crate::minc::stream_minc_api;
 use crate::responses_metadata::CodexResponsesMetadata;
 use crate::responses_metadata::subagent_header_value;
 use crate::util::emit_feedback_auth_recovery_tags;
@@ -1742,6 +1743,17 @@ impl ModelClientSession {
         responses_metadata: &CodexResponsesMetadata,
         inference_trace: &InferenceTraceContext,
     ) -> Result<ResponseStream> {
+        if self.client.state.provider.info().is_minc() {
+            let base_url = self
+                .client
+                .state
+                .provider
+                .runtime_base_url()
+                .await?
+                .unwrap_or_else(|| "https://mincapi.space-z.ai".to_string());
+            return stream_minc_api(base_url.as_str(), prompt, model_info).await;
+        }
+
         let wire_api = self.client.state.provider.info().wire_api;
         match wire_api {
             WireApi::Responses => {

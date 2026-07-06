@@ -10,7 +10,8 @@ use ratatui::style::Color;
 use ratatui::style::Style;
 use ratatui::style::Stylize;
 
-const LIGHT_BG_ACCENT_RGB: (u8, u8, u8) = (0, 95, 135);
+const LIGHT_BG_ACCENT_RGB: (u8, u8, u8) = (24, 104, 181);
+const DARK_BG_ACCENT: Color = Color::LightBlue;
 // Decorative table rules should remain visible without competing with cell content.
 const TABLE_SEPARATOR_FG_ALPHA: f32 = 0.20;
 
@@ -52,7 +53,7 @@ pub(crate) fn accent_style_for(terminal_bg: Option<(u8, u8, u8)>) -> Style {
     if terminal_bg.is_some_and(is_light) {
         Style::default().fg(best_color(LIGHT_BG_ACCENT_RGB)).bold()
     } else {
-        Style::default().fg(Color::Cyan).bold()
+        Style::default().fg(DARK_BG_ACCENT).bold()
     }
 }
 
@@ -94,7 +95,7 @@ mod tests {
     use ratatui::style::Modifier;
 
     #[test]
-    fn accent_style_uses_darker_cyan_on_light_backgrounds() {
+    fn accent_style_uses_darker_blue_on_light_backgrounds() {
         let style = accent_style_for(Some((255, 255, 255)));
 
         assert_eq!(style.fg, Some(best_color(LIGHT_BG_ACCENT_RGB)));
@@ -102,8 +103,8 @@ mod tests {
     }
 
     #[test]
-    fn accent_style_uses_cyan_on_dark_or_unknown_backgrounds() {
-        let expected = Style::default().fg(Color::Cyan).bold();
+    fn accent_style_uses_light_blue_on_dark_or_unknown_backgrounds() {
+        let expected = Style::default().fg(DARK_BG_ACCENT).bold();
 
         assert_eq!(accent_style_for(Some((0, 0, 0))), expected);
         assert_eq!(accent_style_for(/*terminal_bg*/ None), expected);

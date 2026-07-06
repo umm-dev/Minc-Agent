@@ -23,6 +23,7 @@ use crate::auth::ResolvedProviderAuth;
 use crate::auth::auth_manager_for_provider;
 use crate::auth::resolve_provider_auth;
 use crate::auth::resolve_provider_auth_for_scope;
+use crate::minc_models_endpoint::MincModelsEndpoint;
 use crate::models_endpoint::OpenAiModelsEndpoint;
 
 /// Optional provider-backed features that Codex may expose at runtime.
@@ -248,6 +249,18 @@ impl ModelProvider for ConfiguredModelProvider {
         &self.info
     }
 
+    fn capabilities(&self) -> ProviderCapabilities {
+        if self.info.is_minc() {
+            ProviderCapabilities {
+                namespace_tools: true,
+                image_generation: false,
+                web_search: false,
+            }
+        } else {
+            ProviderCapabilities::default()
+        }
+    }
+
     fn auth_manager(&self) -> Option<Arc<AuthManager>> {
         self.auth_manager.clone()
     }
@@ -318,10 +331,15 @@ impl ModelProvider for ConfiguredModelProvider {
                 model_catalog,
             )),
             None => {
-                let endpoint = Arc::new(OpenAiModelsEndpoint::new(
-                    self.info.clone(),
-                    self.auth_manager.clone(),
-                ));
+                let endpoint: Arc<dyn codex_models_manager::manager::ModelsEndpointClient> =
+                    if self.info.is_minc() {
+                        Arc::new(MincModelsEndpoint::new(self.info.clone()))
+                    } else {
+                        Arc::new(OpenAiModelsEndpoint::new(
+                            self.info.clone(),
+                            self.auth_manager.clone(),
+                        ))
+                    };
                 Arc::new(OpenAiModelsManager::new(
                     codex_home,
                     endpoint,
@@ -377,7 +395,14 @@ mod tests {
     }
 
     fn test_codex_home() -> std::path::PathBuf {
-        std::env::temp_dir().join(format!("codex-model-provider-test-{}", std::process::id()))
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "codex-model-provider-test-{}-{unique}",
+            std::process::id()
+        ))
     }
 
     fn provider_for(base_url: String) -> ModelProviderInfo {
@@ -463,6 +488,23 @@ mod tests {
         );
 
         assert_eq!(provider.capabilities(), ProviderCapabilities::default());
+    }
+
+    #[test]
+    fn minc_provider_disables_hosted_capabilities() {
+        let provider = create_model_provider(
+            ModelProviderInfo::create_minc_provider(/*base_url*/ None),
+            /*auth_manager*/ None,
+        );
+
+        assert_eq!(
+            provider.capabilities(),
+            ProviderCapabilities {
+                namespace_tools: true,
+                image_generation: false,
+                web_search: false,
+            }
+        );
     }
 
     #[test]
@@ -752,5 +794,42 @@ mod tests {
                 .iter()
                 .any(|model| model.slug == "provider-model")
         );
+    }
+
+    #[tokio::test]
+    async fn minc_provider_models_manager_uses_minc_models_endpoint() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/v1/models"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "application/json")
+                    .set_body_json(serde_json::json!({
+                        "object": "list",
+                        "data": [
+                            { "id": "Instant", "object": "model", "created": 1700000000, "owned_by": "mincapi" },
+                            { "id": "Auto", "object": "model", "created": 1700000000, "owned_by": "mincapi" }
+                        ]
+                    })),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let provider = create_model_provider(
+            ModelProviderInfo::create_minc_provider(Some(server.uri())),
+            /*auth_manager*/ None,
+        );
+        let manager =
+            provider.models_manager(test_codex_home(), /*config_model_catalog*/ None);
+        let catalog = manager.raw_model_catalog(RefreshStrategy::Online).await;
+        let model_ids = catalog
+            .models
+            .iter()
+            .map(|model| model.slug.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(model_ids, vec!["Instant", "Auto"]);
     }
 }

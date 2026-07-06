@@ -16,6 +16,22 @@ alias c := codex
 codex *args:
     cargo run --bin codex -- {args}
 
+# Run Minc Agent with the default TUI/CLI entrypoint.
+minc *args:
+    cargo run --bin codex -- {args}
+
+# Run the standalone TUI binary directly.
+minc-tui *args:
+    cargo run -p codex-tui --bin codex-tui -- {args}
+
+# Check the main Minc Agent crates without building the entire workspace.
+check-minc:
+    cargo check -p codex-cli -p codex-core -p codex-model-provider -p codex-tui
+
+# Run focused tests for the Minc provider and shim.
+test-minc *args:
+    cargo test -p codex-core -p codex-model-provider -p codex-model-provider-info minc {args}
+
 # `codex exec`
 exec *args:
     cargo run --bin codex -- exec {args}

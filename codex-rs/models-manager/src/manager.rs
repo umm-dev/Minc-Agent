@@ -37,6 +37,11 @@ pub trait ModelsEndpointClient: fmt::Debug + Send + Sync {
     /// Returns whether the currently resolved auth can use Codex backend-only models.
     fn uses_codex_backend(&self) -> ModelsEndpointFuture<'_, bool>;
 
+    /// Returns whether fetched models should replace the local built-in catalog.
+    fn replace_remote_models(&self) -> bool {
+        false
+    }
+
     /// Fetches the latest remote model catalog and optional ETag.
     fn list_models<'a>(
         &'a self,
@@ -355,15 +360,16 @@ impl OpenAiModelsManager {
     async fn apply_remote_models(&self, models: Vec<ModelInfo>) {
         // Use the remote models list as the source of truth if it contains at least one
         // non-hidden model and the user is using ChatGPT auth.
-        let should_use_remote_models_only = !models.is_empty()
-            && models
-                .iter()
-                .any(|model| model.visibility == ModelVisibility::List)
-            && self.auth_manager.as_ref().is_some_and(|auth_manager| {
-                auth_manager
-                    .auth_mode()
-                    .is_some_and(AuthMode::has_chatgpt_account)
-            });
+        let should_use_remote_models_only = self.endpoint_client.replace_remote_models()
+            || (!models.is_empty()
+                && models
+                    .iter()
+                    .any(|model| model.visibility == ModelVisibility::List)
+                && self.auth_manager.as_ref().is_some_and(|auth_manager| {
+                    auth_manager
+                        .auth_mode()
+                        .is_some_and(AuthMode::has_chatgpt_account)
+                }));
         if should_use_remote_models_only {
             *self.remote_models.write().await = models;
             return;

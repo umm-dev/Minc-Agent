@@ -36,6 +36,9 @@ const OPENAI_PROVIDER_NAME: &str = "OpenAI";
 const OPENAI_ACTOR_AUTHORIZATION_HEADER: &str = "x-openai-actor-authorization";
 pub const OPENAI_PROVIDER_ID: &str = "openai";
 pub const CHATGPT_CODEX_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
+const MINC_PROVIDER_NAME: &str = "MincAPI";
+pub const MINC_PROVIDER_ID: &str = "minc";
+pub const MINC_DEFAULT_BASE_URL: &str = "https://mincapi.space-z.ai";
 const AMAZON_BEDROCK_PROVIDER_NAME: &str = "Amazon Bedrock";
 pub const AMAZON_BEDROCK_PROVIDER_ID: &str = "amazon-bedrock";
 pub const AMAZON_BEDROCK_GPT_5_5_MODEL_ID: &str = "openai.gpt-5.5";
@@ -362,6 +365,28 @@ impl ModelProviderInfo {
         }
     }
 
+    pub fn create_minc_provider(base_url: Option<String>) -> ModelProviderInfo {
+        ModelProviderInfo {
+            name: MINC_PROVIDER_NAME.into(),
+            base_url: Some(base_url.unwrap_or_else(|| MINC_DEFAULT_BASE_URL.to_string())),
+            env_key: None,
+            env_key_instructions: None,
+            experimental_bearer_token: None,
+            auth: None,
+            aws: None,
+            wire_api: WireApi::Responses,
+            query_params: None,
+            http_headers: None,
+            env_http_headers: None,
+            request_max_retries: Some(2),
+            stream_max_retries: Some(0),
+            stream_idle_timeout_ms: Some(120_000),
+            websocket_connect_timeout_ms: None,
+            requires_openai_auth: false,
+            supports_websockets: false,
+        }
+    }
+
     pub fn create_amazon_bedrock_provider(
         aws: Option<ModelProviderAwsAuthInfo>,
     ) -> ModelProviderInfo {
@@ -394,6 +419,10 @@ impl ModelProviderInfo {
 
     pub fn is_openai(&self) -> bool {
         self.name == OPENAI_PROVIDER_NAME
+    }
+
+    pub fn is_minc(&self) -> bool {
+        self.name == MINC_PROVIDER_NAME
     }
 
     pub fn uses_openai_actor_authorization(&self) -> bool {
@@ -438,6 +467,10 @@ pub fn built_in_model_providers(
     // open source ("oss") providers by default. Users are encouraged to add to
     // `model_providers` in config.toml to add their own providers.
     [
+        (
+            MINC_PROVIDER_ID,
+            ModelProviderInfo::create_minc_provider(/*base_url*/ None),
+        ),
         (OPENAI_PROVIDER_ID, openai_provider),
         (AMAZON_BEDROCK_PROVIDER_ID, amazon_bedrock_provider),
         (
@@ -482,6 +515,32 @@ pub fn merge_configured_model_providers(
                 }
                 if let Some(region) = aws_override.region {
                     built_in_aws.region = Some(region);
+                }
+            }
+        } else if key == MINC_PROVIDER_ID {
+            let base_url_override = provider.base_url.take();
+            let request_max_retries_override = provider.request_max_retries.take();
+            let stream_max_retries_override = provider.stream_max_retries.take();
+            let stream_idle_timeout_override = provider.stream_idle_timeout_ms.take();
+            if provider != ModelProviderInfo::default() {
+                return Err(format!(
+                    "model_providers.{MINC_PROVIDER_ID} only supports changing `base_url`, \
+`request_max_retries`, `stream_max_retries`, and `stream_idle_timeout_ms`"
+                ));
+            }
+
+            if let Some(built_in_provider) = model_providers.get_mut(MINC_PROVIDER_ID) {
+                if let Some(base_url) = base_url_override {
+                    built_in_provider.base_url = Some(base_url);
+                }
+                if let Some(request_max_retries) = request_max_retries_override {
+                    built_in_provider.request_max_retries = Some(request_max_retries);
+                }
+                if let Some(stream_max_retries) = stream_max_retries_override {
+                    built_in_provider.stream_max_retries = Some(stream_max_retries);
+                }
+                if let Some(stream_idle_timeout_ms) = stream_idle_timeout_override {
+                    built_in_provider.stream_idle_timeout_ms = Some(stream_idle_timeout_ms);
                 }
             }
         } else {

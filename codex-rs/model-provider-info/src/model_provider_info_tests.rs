@@ -333,6 +333,18 @@ fn test_built_in_model_providers_include_amazon_bedrock() {
 }
 
 #[test]
+fn test_built_in_model_providers_include_minc() {
+    let providers = built_in_model_providers(/*openai_base_url*/ None);
+
+    assert_eq!(
+        providers
+            .get(MINC_PROVIDER_ID)
+            .map(ModelProviderInfo::is_minc),
+        Some(true)
+    );
+}
+
+#[test]
 fn test_merge_configured_model_providers_adds_custom_provider() {
     let custom_provider = ModelProviderInfo {
         name: "Custom".to_string(),
@@ -351,6 +363,59 @@ fn test_merge_configured_model_providers_adds_custom_provider() {
             configured_model_providers,
         ),
         Ok(expected)
+    );
+}
+
+#[test]
+fn test_merge_configured_model_providers_applies_minc_overrides() {
+    let configured_model_providers = std::collections::HashMap::from([(
+        MINC_PROVIDER_ID.to_string(),
+        ModelProviderInfo {
+            base_url: Some("https://minc.example.com".to_string()),
+            request_max_retries: Some(9),
+            stream_max_retries: Some(1),
+            stream_idle_timeout_ms: Some(45_000),
+            ..ModelProviderInfo::default()
+        },
+    )]);
+
+    let mut expected = built_in_model_providers(/*openai_base_url*/ None);
+    let minc_provider = expected
+        .get_mut(MINC_PROVIDER_ID)
+        .expect("Minc provider should be built in");
+    minc_provider.base_url = Some("https://minc.example.com".to_string());
+    minc_provider.request_max_retries = Some(9);
+    minc_provider.stream_max_retries = Some(1);
+    minc_provider.stream_idle_timeout_ms = Some(45_000);
+
+    assert_eq!(
+        merge_configured_model_providers(
+            built_in_model_providers(/*openai_base_url*/ None),
+            configured_model_providers,
+        ),
+        Ok(expected)
+    );
+}
+
+#[test]
+fn test_merge_configured_model_providers_rejects_minc_non_default_fields() {
+    let configured_model_providers = std::collections::HashMap::from([(
+        MINC_PROVIDER_ID.to_string(),
+        ModelProviderInfo {
+            name: "Custom Minc".to_string(),
+            ..ModelProviderInfo::default()
+        },
+    )]);
+
+    assert_eq!(
+        merge_configured_model_providers(
+            built_in_model_providers(/*openai_base_url*/ None),
+            configured_model_providers,
+        ),
+        Err(
+            "model_providers.minc only supports changing `base_url`, `request_max_retries`, `stream_max_retries`, and `stream_idle_timeout_ms`"
+                .to_string()
+        )
     );
 }
 

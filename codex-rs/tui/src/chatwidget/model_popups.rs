@@ -75,6 +75,11 @@ impl ChatWidget {
             .filter(|preset| preset.show_in_picker)
             .collect();
 
+        if self.config.model_provider.is_minc() {
+            self.open_minc_mode_popup(presets);
+            return;
+        }
+
         let current_model = self.current_model();
         let current_label = presets
             .iter()
@@ -145,6 +150,54 @@ impl ChatWidget {
         let header = self.model_menu_header(
             "Select Model",
             "Pick a quick auto mode or browse all models.",
+        );
+        self.bottom_pane.show_selection_view(SelectionViewParams {
+            footer_hint: Some(standard_popup_hint_line()),
+            items,
+            header,
+            ..Default::default()
+        });
+    }
+
+    fn open_minc_mode_popup(&mut self, mut presets: Vec<ModelPreset>) {
+        if presets.is_empty() {
+            self.add_info_message(
+                "No Minc modes are available right now.".to_string(),
+                /*hint*/ None,
+            );
+            return;
+        }
+
+        presets.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+        presets.sort_by_key(|preset| match preset.model.as_str() {
+            "Auto" => 0,
+            "Instant" => 1,
+            "Low Reasoning" => 2,
+            "High Reasoning" => 3,
+            _ => 10,
+        });
+
+        let current_model = self.current_model();
+        let items: Vec<SelectionItem> = presets
+            .into_iter()
+            .map(|preset| SelectionItem {
+                name: preset.model.clone(),
+                description: (!preset.description.is_empty()).then_some(preset.description),
+                is_current: preset.model.as_str() == current_model,
+                is_default: preset.is_default,
+                actions: Self::model_selection_actions(
+                    preset.model,
+                    /*effort_for_action*/ None,
+                    /*should_prompt_plan_mode_scope*/ false,
+                ),
+                dismiss_on_select: true,
+                ..Default::default()
+            })
+            .collect();
+
+        let header = self.model_menu_header(
+            "Select Minc Mode",
+            "Choose how quickly or deeply Minc should reason for the next turns.",
         );
         self.bottom_pane.show_selection_view(SelectionViewParams {
             footer_hint: Some(standard_popup_hint_line()),

@@ -3,6 +3,11 @@
   "private": true,
   "description": "Tools for repo-wide maintenance.",
   "scripts": {
+    "dev": "cargo run --manifest-path ./codex-rs/Cargo.toml --bin codex --",
+    "dev:tui": "cargo run --manifest-path ./codex-rs/Cargo.toml -p codex-tui --bin codex-tui --",
+    "install:rust": "cargo fetch --manifest-path ./codex-rs/Cargo.toml",
+    "check": "cargo check --manifest-path ./codex-rs/Cargo.toml -p codex-cli -p codex-core -p codex-model-provider -p codex-tui",
+    "test:minc": "cargo test --manifest-path ./codex-rs/Cargo.toml -p codex-core -p codex-model-provider -p codex-model-provider-info minc",
     "format": "prettier --check *.json *.md docs/*.md .github/workflows/*.yml **/*.js",
     "format:fix": "prettier --write *.json *.md docs/*.md .github/workflows/*.yml **/*.js",
     "write-hooks-schema": "cargo run --manifest-path ./codex-rs/Cargo.toml -p codex-hooks --bin write_hooks_schema_fixtures"

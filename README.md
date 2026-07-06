@@ -1,69 +1,57 @@
-<p align="center"><strong>Codex CLI</strong> is a coding agent from OpenAI that runs locally on your computer.
+<p align="center"><strong>Minc Agent</strong> is a local coding agent fork with a terminal UI, light-blue branding, and MincAPI-backed inference.
 <p align="center">
-  <img src="https://github.com/openai/codex/blob/main/.github/codex-cli-splash.png" alt="Codex CLI splash" width="80%" />
+  <img src="https://github.com/openai/codex/blob/main/.github/codex-cli-splash.png" alt="Minc Agent splash" width="80%" />
 </p>
 </br>
-If you want Codex in your code editor (VS Code, Cursor, Windsurf), <a href="https://developers.openai.com/codex/ide">install in your IDE.</a>
-</br>If you want the desktop app experience, run <code>codex app</code> or visit <a href="https://chatgpt.com/codex?app-landing-page=true">the Codex App page</a>.
-</br>If you are looking for the <em>cloud-based agent</em> from OpenAI, <strong>Codex Web</strong>, go to <a href="https://chatgpt.com/codex">chatgpt.com/codex</a>.</p>
+Use `/model` to switch between Minc modes: `Auto`, `Instant`, `Low Reasoning`, and `High Reasoning`.
+</br>MincAPI docs live at <a href="https://mincapi.space-z.ai/#quickstart">mincapi.space-z.ai/#quickstart</a>.</p>
 
 ---
 
 ## Quickstart
 
-### Installing and running Codex CLI
+### Running Minc Agent
 
-Run the following on Mac or Linux to install Codex CLI:
+This fork keeps the existing `codex` binary name and defaults to the built-in `minc` provider.
 
-```shell
-curl -fsSL https://chatgpt.com/codex/install.sh | sh
-```
-
-Run the following on Windows to install Codex CLI:
+Install the pinned Rust toolchain first. The repo already includes [`codex-rs/rust-toolchain.toml`](./codex-rs/rust-toolchain.toml), so `rustup` will pick the right version automatically once it is installed.
 
 ```shell
-powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
+rustup toolchain install 1.95.0
+pnpm run install:rust
+pnpm run dev
 ```
 
-Codex CLI can also be installed via the following package managers:
+If you prefer `just`, the equivalent commands are:
 
 ```shell
-# Install using npm
-npm install -g @openai/codex
+just install
+just minc
 ```
+
+Helpful shortcuts from the repo root:
 
 ```shell
-# Install using Homebrew
-brew install --cask codex
+pnpm run dev:tui
+pnpm run check
+pnpm run test:minc
 ```
 
-Then simply run `codex` to get started.
+### Using MincAPI
 
-<details>
-<summary>You can also go to the <a href="https://github.com/openai/codex/releases/latest">latest GitHub Release</a> and download the appropriate binary for your platform.</summary>
+Minc Agent talks to `https://mincapi.space-z.ai` by default.
+You can override the provider base URL in config if you need to target another deployment.
 
-Each GitHub Release contains many executables, but in practice, you likely want one of these:
+The main in-app model picker exposes the four Minc modes directly:
 
-- macOS
-  - Apple Silicon/arm64: `codex-aarch64-apple-darwin.tar.gz`
-  - x86_64 (older Mac hardware): `codex-x86_64-apple-darwin.tar.gz`
-- Linux
-  - x86_64: `codex-x86_64-unknown-linux-musl.tar.gz`
-  - arm64: `codex-aarch64-unknown-linux-musl.tar.gz`
-
-Each archive contains a single entry with the platform baked into the name (e.g., `codex-x86_64-unknown-linux-musl`), so you likely want to rename it to `codex` after extracting it.
-
-</details>
-
-### Using Codex with your ChatGPT plan
-
-Run `codex` and select **Sign in with ChatGPT**. We recommend signing into your ChatGPT account to use Codex as part of your Plus, Pro, Business, Edu, or Enterprise plan. [Learn more about what's included in your ChatGPT plan](https://help.openai.com/en/articles/11369540-codex-in-chatgpt).
-
-You can also use Codex with an API key, but this requires [additional setup](https://developers.openai.com/codex/auth#sign-in-with-an-api-key).
+- `Auto`
+- `Instant`
+- `Low Reasoning`
+- `High Reasoning`
 
 ## Docs
 
-- [**Codex Documentation**](https://developers.openai.com/codex)
+- [**MincAPI Quickstart**](https://mincapi.space-z.ai/#quickstart)
 - [**Contributing**](./docs/contributing.md)
 - [**Installing & building**](./docs/install.md)
 - [**Open source fund**](./docs/open-source-fund.md)
