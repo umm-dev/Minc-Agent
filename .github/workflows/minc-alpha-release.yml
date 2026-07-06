@@ -1,0 +1,201 @@
+name: minc-alpha-release
+
+on:
+  push:
+    tags:
+      - "minc-v*.*.*-*"
+
+env:
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+jobs:
+  tag-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Validate alpha tag matches workspace version
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_REF_TYPE}" == "tag" ]] || { echo "Not a tag ref"; exit 1; }
+          [[ "${GITHUB_REF_NAME}" =~ ^minc-v[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]] || {
+            echo "Tag '${GITHUB_REF_NAME}' must look like minc-v0.1.0-alpha.1"
+            exit 1
+          }
+
+          tag_ver="${GITHUB_REF_NAME#minc-v}"
+          cargo_ver="$(grep -m1 '^version' codex-rs/Cargo.toml | sed -E 's/version *= *"([^"]+)".*/\1/')"
+          [[ "${tag_ver}" == "${cargo_ver}" ]] || {
+            echo "Tag ${tag_ver} does not match Cargo.toml ${cargo_ver}"
+            exit 1
+          }
+
+  build:
+    needs: tag-check
+    runs-on: ${{ matrix.runs_on }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: codex-rs
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os_name: linux
+            runs_on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            archive_ext: tar.gz
+          - os_name: macos
+            runs_on: macos-13
+            target: x86_64-apple-darwin
+            archive_ext: tar.gz
+          - os_name: windows
+            runs_on: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive_ext: zip
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux release build dependencies
+        if: ${{ matrix.os_name == 'linux' }}
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.14.0
+          use-cache: false
+
+      - name: Install musl toolchain
+        if: ${{ matrix.os_name == 'linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export TARGET="${{ matrix.target }}"
+          echo "TARGET=${TARGET}" >> "$GITHUB_ENV"
+          bash "${GITHUB_WORKSPACE}/.github/scripts/install-musl-build-tools.sh"
+          echo "AWS_LC_SYS_NO_JITTER_ENTROPY=1" >> "$GITHUB_ENV"
+          target_key="AWS_LC_SYS_NO_JITTER_ENTROPY_${TARGET//-/_}"
+          echo "${target_key}=1" >> "$GITHUB_ENV"
+
+      - name: Configure rusty_v8 artifact overrides
+        uses: ./.github/actions/setup-rusty-v8
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Build Linux bwrap helper
+        if: ${{ matrix.os_name == 'linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --target "${{ matrix.target }}" --release --bin bwrap
+
+      - name: Build codex
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --target "${{ matrix.target }}" --release --bin codex
+
+      - name: Package Unix artifact
+        if: ${{ matrix.os_name != 'windows' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#minc-v}"
+          stage_dir="${RUNNER_TEMP}/minc-agent-${version}-${{ matrix.target }}"
+          archive_dir="${GITHUB_WORKSPACE}/dist/${{ matrix.target }}"
+          archive_name="minc-agent-${version}-${{ matrix.target }}.tar.gz"
+
+          rm -rf "${stage_dir}"
+          mkdir -p "${stage_dir}" "${archive_dir}"
+          cp "target/${{ matrix.target }}/release/codex" "${stage_dir}/codex"
+          chmod 0755 "${stage_dir}/codex"
+
+          if [[ "${{ matrix.os_name }}" == "linux" ]]; then
+            cp "target/${{ matrix.target }}/release/bwrap" "${stage_dir}/bwrap"
+            chmod 0755 "${stage_dir}/bwrap"
+          fi
+
+          tar -C "${RUNNER_TEMP}" -czf "${archive_dir}/${archive_name}" "$(basename "${stage_dir}")"
+
+      - name: Package Windows artifact
+        if: ${{ matrix.os_name == 'windows' }}
+        shell: pwsh
+        run: |
+          $version = "${env:GITHUB_REF_NAME}" -replace "^minc-v", ""
+          $stageDir = Join-Path $env:RUNNER_TEMP "minc-agent-$version-${{ matrix.target }}"
+          $archiveDir = Join-Path $env:GITHUB_WORKSPACE "dist/${{ matrix.target }}"
+          $archiveName = "minc-agent-$version-${{ matrix.target }}.zip"
+
+          if (Test-Path $stageDir) { Remove-Item -Recurse -Force $stageDir }
+          New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $archiveDir | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/codex.exe" "$stageDir/codex.exe"
+
+          if (Test-Path "$archiveDir/$archiveName") { Remove-Item -Force "$archiveDir/$archiveName" }
+          Compress-Archive -Path "$stageDir/*" -DestinationPath "$archiveDir/$archiveName"
+
+      - name: Upload packaged artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ matrix.target }}
+          path: dist/${{ matrix.target }}/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          pattern: "*"
+
+      - name: Generate checksum manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#minc-v}"
+          manifest="dist/minc-agent-${version}-SHA256SUMS"
+          find dist -type f | sort | xargs sha256sum > "${manifest}"
+          cat "${manifest}"
+
+      - name: Compute release name
+        id: release_name
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#minc-v}"
+          IFS='.' read -r major minor patch_rest <<< "${version}"
+          echo "name=Minc Agent Alpha ${major}.${minor}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+        with:
+          name: ${{ steps.release_name.outputs.name }}
+          tag_name: ${{ github.ref_name }}
+          body: |
+            Alpha release for Minc Agent.
+
+            Version: `${{ steps.release_name.outputs.version }}`
+            Artifacts:
+            - Linux `x86_64-unknown-linux-musl`
+            - macOS `x86_64-apple-darwin`
+            - Windows `x86_64-pc-windows-msvc`
+          prerelease: true
+          files: dist/**
+          overwrite_files: true
