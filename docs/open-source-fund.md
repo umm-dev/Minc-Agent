@@ -1,8 +1,7 @@
-## Codex open source fund
+## Open source fund note
 
-We're excited to launch a **$1 million initiative** supporting open source projects that use Codex CLI and other OpenAI models.
+This page is kept only as an upstream reference note.
 
-- Grants are awarded up to **$25,000** API credits.
-- Applications are reviewed **on a rolling basis**.
+The Codex open source fund was an OpenAI program associated with the upstream Codex project. It is not a Minc Agent program, maintainer policy, endorsement, or active feature of this fork.
 
-**Interested? [Apply here](https://openai.com/form/codex-open-source-fund/).**
+If you encounter links or references to that program in older upstream material, treat them as historical context rather than current Minc Agent documentation.

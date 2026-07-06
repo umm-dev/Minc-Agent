@@ -1,5 +1,7 @@
-OpenAI Codex
-Copyright 2025 OpenAI
+Minc Agent
+Derived from OpenAI Codex.
+Original upstream copyright 2025 OpenAI.
+Fork changes maintained separately by Minc Agent contributors.
 
 This project includes code derived from [Ratatui](https://github.com/ratatui/ratatui), licensed under the MIT license.
 Copyright (c) 2016-2022 Florian Dehau
