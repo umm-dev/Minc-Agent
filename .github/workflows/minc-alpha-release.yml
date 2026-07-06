@@ -85,7 +85,14 @@ jobs:
           echo "${target_key}=1" >> "$GITHUB_ENV"
 
       - name: Configure rusty_v8 artifact overrides
+        if: ${{ matrix.os_name != 'windows' }}
         uses: ./.github/actions/setup-rusty-v8
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Configure LLVM linker
+        if: ${{ matrix.os_name == 'windows' }}
+        uses: ./.github/actions/setup-msvc-env
         with:
           target: ${{ matrix.target }}
 
@@ -100,7 +107,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo build --target "${{ matrix.target }}" --release --bin codex
+          target="${{ matrix.target }}"
+          if [[ "$target" == "x86_64-pc-windows-msvc" ]]; then
+            export LIBSQLITE3_FLAGS=SQLITE_DISABLE_INTRINSIC
+          fi
+          cargo build --target "${target}" --release --bin codex
 
       - name: Package Unix artifact
         if: ${{ matrix.os_name != 'windows' }}
